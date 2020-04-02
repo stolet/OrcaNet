@@ -45,7 +45,7 @@ class Killer_Whale_Dataset(Dataset):
                 "mask_species": mask["species"]}
 
     def __len__(self):
-        return len(self.imgs)
+        return len(self.img_list)
 
     @staticmethod 
     def _load_dataset(path):
@@ -78,12 +78,6 @@ whale_path = 'data/'
 
 
 whale_data = Killer_Whale_Dataset(whale_path,transform = transform)
-print(whale_data.img_list)
-print(whale_data.mask_list)
-#print(whale_data.__len__())
-#print(type(whale_data[0]))
-#plt.imshow(whale_data[5]['mask'])
-#plt.show()
 
 
 
