@@ -16,23 +16,27 @@
 ###import part
 ########################################
 
-from __future__ import print_function, division
 import os
 import torch
-import pandas as pd
-from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
+from skimage import io, transform
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
+from torchvision import transforms
 from PIL import Image
-import torchvision
-import pdb
+import pickle
 
 class Killer_Whale_Dataset(Dataset):
     def __init__(self, data_folder, transform = None):
         super().__init__()
-        self.img_list, self.mask_list = Killer_Whale_Dataset._load_dataset(data_folder)
+        if os.path.exists("data/imgs.npy") and os.path.exists("data/masks.npy"):
+            self.img_list = np.load("data/imgs.npy", allow_pickle=True)
+            self.mask_list = np.load("data/masks.npy", allow_pickle=True)
+        else:
+            self.img_list, self.mask_list = Killer_Whale_Dataset._load_dataset(data_folder)
+            np.save("data/imgs.npy", self.img_list)
+            np.save("data/masks.npy", self.mask_list)
 
     def __getitem__(self, idx):
         img = self.img_list[idx]
@@ -61,25 +65,31 @@ class Killer_Whale_Dataset(Dataset):
                 img_or_mask = filepath.split("/")[3]
                 
                 whale["id"] = id
-                whale["species"] = species
+                
+                if "resident" in species:
+                    whale["species"] = "resident"
+                elif "transient" in species:
+                    whale["species"] = "transient"
 
+                img = Image.open(filepath)
+                img.load()
+                img = np.asarray(img)
                 if img_or_mask == "img":
-                    whale["img"] = Image.open(filepath) 
+                    whale["img"] = img 
                     imgs.append(whale)
                 elif img_or_mask == "mask":
-                    whale["mask"] = Image.open(filepath)
+                    whale["mask"] = img
                     masks.append(whale)
+        
         return imgs, masks
- 
-transform = transforms.Compose([transforms.ToTensor()])   
-
-whale_path = 'data/'
 
 
-
-whale_data = Killer_Whale_Dataset(whale_path,transform = transform)
-
-
-
-
-
+#transform = transforms.Compose([transforms.ToTensor()])
+#
+#whale_path = 'data/'
+#
+#whale_data = Killer_Whale_Dataset(whale_path,transform = transform)
+#print(whale_data.__len__())
+#print(type(whale_data[0]))
+#plt.imshow(whale_data[5]['mask'])
+#plt.show()
