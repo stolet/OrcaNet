@@ -30,6 +30,7 @@ import pickle
 class Killer_Whale_Dataset(Dataset):
     def __init__(self, data_folder, transform = None):
         super().__init__()
+        self.transform = transform
         if os.path.exists("data/imgs.npy") and os.path.exists("data/masks.npy"):
             self.img_list = np.load("data/imgs.npy", allow_pickle=True)
             self.mask_list = np.load("data/masks.npy", allow_pickle=True)
@@ -41,10 +42,18 @@ class Killer_Whale_Dataset(Dataset):
     def __getitem__(self, idx):
         img = self.img_list[idx]
         mask = self.mask_list[idx]
-        return {"img": img["img"], 
+
+        img_array = img["img"]
+        mask_array = mask["mask"]
+        if self.transform:
+            img_array = self.transform(img_array)
+            
+            mask_array = self.transform(mask_array)
+        
+        return {"img": img_array, 
                 "img_id": img["id"], 
                 "img_species": img["species"], 
-                "mask": mask["mask"], 
+                "mask": mask_array, 
                 "mask_id": mask["id"], 
                 "mask_species": mask["species"]}
 
@@ -72,8 +81,7 @@ class Killer_Whale_Dataset(Dataset):
                     whale["species"] = "transient"
 
                 img = Image.open(filepath)
-                img.load()
-                img = np.asarray(img)
+                img = img.resize((600, 600))
                 if img_or_mask == "img":
                     whale["img"] = img 
                     imgs.append(whale)
@@ -84,12 +92,12 @@ class Killer_Whale_Dataset(Dataset):
         return imgs, masks
 
 
-#transform = transforms.Compose([transforms.ToTensor()])
-#
-#whale_path = 'data/'
-#
-#whale_data = Killer_Whale_Dataset(whale_path,transform = transform)
-#print(whale_data.__len__())
-#print(type(whale_data[0]))
-#plt.imshow(whale_data[5]['mask'])
-#plt.show()
+transform = transforms.Compose([transforms.ToTensor()])
+
+whale_path = 'data/'
+
+whale_data = Killer_Whale_Dataset(whale_path, transform=transform)
+print(whale_data.__len__())
+print(type(whale_data[0]))
+plt.imshow(transforms.ToPILImage()(whale_data[0]['img']))
+plt.show()
