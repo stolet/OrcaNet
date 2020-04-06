@@ -50,16 +50,17 @@ validation_loader = torch.utils.data.DataLoader(val_set,
 # Functions to evaluate validation error
 def get_error(net, data):
     iterator = iter(data)
-    errsum = 0
     total = 0
-    err = 0
-    for i in range(int(round((len(data) / 8)))):
+    acc = 0
+    for i in range(len(data)):
         batch = next(iterator)
-        preds = net(batch)
-        misclassifications = np.count_nonzero(batch["species"] - preds["species"].argmax(1))
-        total += len(batch)
-        err += misclassifcations
-    return err / total
+        batch_gpu = batch.to(device)
+        preds = net(batch_gpu)
+        preds_cpu = preds.to('cpu')
+        correct = np.count_nonzero(batch["species"] - preds_cpu["species"].argmax(1) == 0)
+        total += len(batch_gpu)
+        acc += correct
+    return acc / total
 
 
 # Train network
@@ -79,10 +80,10 @@ valError = []
 
 for epoch in range(6):
     train_iter = iter(train_loader)
-    for i in range(len(train_set)):
+    for i in range(len(train_loader)):
         batch = next(train_iter)
         batch_gpu = batch.to(device)
-        preds = network(batch["img"])
+        preds = network(batch_gpu)
         pred_cpu = preds.to('cpu')
         loss = nn.functional.cross_entropy(preds["species"], batch_gpu["species"])
 

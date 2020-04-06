@@ -27,6 +27,11 @@ from torchvision import transforms
 from PIL import Image
 import pickle
 
+# Labels for identifying species:
+# - index 0 is for transient
+# - index 1 is for resident
+species = ["resident", "transient"]
+
 class Killer_Whale_Dataset(Dataset):
     def __init__(self, data_folder, transform = None):
         super().__init__()
@@ -38,6 +43,7 @@ class Killer_Whale_Dataset(Dataset):
             self.img_list, self.mask_list = Killer_Whale_Dataset._load_dataset(data_folder)
             self.img_list.sort(key=lambda x: x["path"])
             self.mask_list.sort(key=lambda x: x["path"])
+            self.img_list, self.mask_list = Killer_Whale_Dataset._remove_grayscale(self.img_list, self.mask_list)
             np.save("data/imgs.npy", self.img_list)
             np.save("data/masks.npy", self.mask_list)
 
@@ -46,21 +52,30 @@ class Killer_Whale_Dataset(Dataset):
         mask = self.mask_list[idx]
 
         img_array = img["img"]
+        species_array = img["species"]
         mask_array = mask["mask"]
         if self.transform:
             img_array = self.transform(img_array)
-            
             mask_array = self.transform(mask_array)
-        
-        return {"img": img_array, 
-                "img_id": img["id"], 
-                "img_species": img["species"],
-                "mask": mask_array, 
-                "mask_id": mask["id"], 
-                "mask_species": mask["species"]}
+       
+        return DeviceDict({"img": img_array, 
+                "id": img["id"], 
+                "species": species_array,
+                "mask": mask_array}) 
 
     def __len__(self):
         return len(self.img_list)
+
+    @staticmethod
+    def _remove_grayscale(img_list, mask_list):
+        indices = []
+        for i, img in enumerate(img_list):
+            num_channels = img["img"].mode
+            if num_channels != "RGB":
+                indices.append(i)
+        img_list = np.delete(img_list, indices)
+        mask_list = np.delete(mask_list, indices)
+        return img_list, mask_list
 
     @staticmethod 
     def _load_dataset(path):
@@ -83,12 +98,12 @@ class Killer_Whale_Dataset(Dataset):
                 whale["path"] = filepath
 
                 if "resident" in species:
-                    whale["species"] = "resident"
+                    whale["species"] = 0
                 elif "transient" in species:
-                    whale["species"] = "transient"
+                    whale["species"] = 1
 
                 img = Image.open(filepath)
-                img = img.resize((600, 600))
+                img = img.resize((400, 400))
                 if img_or_mask == "img" or img_or_mask == "IMG":
                     whale["img"] = img 
                     imgs.append(whale)
@@ -98,11 +113,25 @@ class Killer_Whale_Dataset(Dataset):
         
         return imgs, masks 
 
-#transform = transforms.Compose([transforms.ToTensor()])
-#
-#whale_path = 'data/'
-#
-#whale_data = Killer_Whale_Dataset(whale_path, transform=transform)
+# Wrapper that copies tensors in dict to a GPU
+class DeviceDict(dict):
+    def __init__(self, *args):
+        super(DeviceDict, self).__init__(*args)
+
+    def to(self, device):
+        dd = DeviceDict()
+        for k, v in self.items():
+            if torch.is_tensor(v):
+                dd[k] = v.to(device)
+            else:
+                dd[k] = v
+        return dd
+
+transform = transforms.Compose([transforms.ToTensor()])
+
+whale_path = 'data/'
+
+whale_data = Killer_Whale_Dataset(whale_path, transform=transform)
 #print(whale_data.__len__())
 #print(type(whale_data[0]))
 #plt.imshow(transforms.ToPILImage()(whale_data[268]['img']))
