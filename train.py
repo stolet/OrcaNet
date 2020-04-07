@@ -8,6 +8,9 @@ import math
 import matplotlib.pyplot as plt
 from network import OrcaNet
 
+import sys
+np.set_printoptions(threshold=sys.maxsize)
+
 # Import torchvision module to handle image manipulation
 import torchvision
 import torchvision.transforms as transforms
@@ -32,14 +35,14 @@ val_set = torch.utils.data.Subset(dataset, list(range(validx, len(dataset))))
 # collate_fn_device allows us to preserve custom dictionary when fetching a batch
 collate_fn_device = lambda batch : DeviceDict(torch.utils.data.dataloader.default_collate(batch))
 train_loader = torch.utils.data.DataLoader(train_set, 
-        batch_size = 4, 
+        batch_size = 6, 
         num_workers = 0,
         pin_memory = False,
         shuffle = True,
         drop_last = True,
         collate_fn = collate_fn_device)
 validation_loader = torch.utils.data.DataLoader(val_set, 
-        batch_size = 4, 
+        batch_size = 6, 
         num_workers = 0,
         pin_memory = False,
         shuffle = True,
@@ -57,10 +60,8 @@ def get_error(net, data):
         batch_gpu = batch.to(device)
         preds = net(batch_gpu)
         preds_cpu = preds.to('cpu')
-        print(batch["species"])
-        print(preds_cpu["species"])
         correct = np.count_nonzero(batch["species"] - preds_cpu["species"].argmax(1) == 0)
-        total += len(batch_gpu)
+        total += len(batch_gpu["species"])
         acc += correct
     return acc / total
 
@@ -75,8 +76,7 @@ if torch.cuda.device_count() > 1:
     network = nn.DataParallel(network)
 network.to(device)
 
-
-optimizer = optim.SGD(network.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
 losses = []
 valError = []
 
@@ -92,6 +92,7 @@ for epoch in range(6):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        #print(network.module.conv1.weight.grad)
         losses.append(loss.item())
         if i % 10 == 0:
             print("Loss:", i, losses[-1])
@@ -99,3 +100,4 @@ for epoch in range(6):
     val_accuracy = get_error(network, validation_loader)
     valError.append(val_accuracy)
     print("Val Accuracy: " + str(val_accuracy))
+
