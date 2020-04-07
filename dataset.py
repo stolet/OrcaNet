@@ -26,6 +26,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
 import pickle
+import random
 
 # Labels for identifying species:
 # - index 0 is for transient
@@ -36,35 +37,34 @@ class Killer_Whale_Dataset(Dataset):
     def __init__(self, data_folder, transform = None):
         super().__init__()
         self.transform = transform
-        if os.path.exists("data/imgs.npy") and os.path.exists("data/masks.npy"):
-            self.img_list = np.load("data/imgs.npy", allow_pickle=True)
-            self.mask_list = np.load("data/masks.npy", allow_pickle=True)
+        if os.path.exists("data/data.npy"):
+            self.data = np.load("data/data.npy", allow_pickle=True)
         else:
             self.img_list, self.mask_list = Killer_Whale_Dataset._load_dataset(data_folder)
             self.img_list.sort(key=lambda x: x["path"])
             self.mask_list.sort(key=lambda x: x["path"])
             self.img_list, self.mask_list = Killer_Whale_Dataset._remove_grayscale(self.img_list, self.mask_list)
-            np.save("data/imgs.npy", self.img_list)
-            np.save("data/masks.npy", self.mask_list)
+            self.data = Killer_Whale_Dataset.merge_masks_and_imgs(self.img_list, self.mask_list)
+            random.shuffle(self.data)
+            np.save("data/data.npy", self.data)
 
     def __getitem__(self, idx):
-        img = self.img_list[idx]
-        mask = self.mask_list[idx]
+        elt = self.data[idx]
 
-        img_array = img["img"]
-        species_array = img["species"]
-        mask_array = mask["mask"]
+        img_array = elt["img"]
+        species_array = elt["species"]
+        mask_array = elt["mask"]
         if self.transform:
             img_array = self.transform(img_array)
             mask_array = self.transform(mask_array)
        
         return DeviceDict({"img": img_array, 
-                "id": img["id"], 
+                "id": elt["id"], 
                 "species": species_array,
                 "mask": mask_array}) 
 
     def __len__(self):
-        return len(self.img_list)
+        return len(self.data)
 
     @staticmethod
     def _remove_grayscale(img_list, mask_list):
@@ -112,6 +112,16 @@ class Killer_Whale_Dataset(Dataset):
                     masks.append(whale)
         
         return imgs, masks 
+
+    @staticmethod
+    def merge_masks_and_imgs(img_list, mask_list):
+        data = []
+        for i, val in enumerate(img_list):
+            mask = mask_list[i]["mask"]
+            val["mask"] = mask
+            data.append(val)
+        return data
+        
 
 # Wrapper that copies tensors in dict to a GPU
 class DeviceDict(dict):

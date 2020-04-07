@@ -57,6 +57,8 @@ def get_error(net, data):
         batch_gpu = batch.to(device)
         preds = net(batch_gpu)
         preds_cpu = preds.to('cpu')
+        print(batch["species"])
+        print(preds_cpu["species"])
         correct = np.count_nonzero(batch["species"] - preds_cpu["species"].argmax(1) == 0)
         total += len(batch_gpu)
         acc += correct
