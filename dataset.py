@@ -31,7 +31,11 @@ import random
 # Labels for identifying species:
 # - index 0 is for transient
 # - index 1 is for resident
-species = ["resident", "transient"]
+species_labels = {"resident": 0, "transient": 1}
+id_labels = {"A050": 0, "A056": 1, "A077": 2, "C008": 3, "G020": 4, "G039": 5, "G065": 6, "G086": 7, "G099": 8, "I054": 9,
+        "I078": 10, "I098": 11, "I104": 12, "I108": 13, "I119": 14, "R005": 15, "R024": 16, "R028": 17, "R043": 18, "R050": 19, 
+        "KW1CA50B": 20, "KW2CA49C": 21, "KW3CA140": 22, "KW4CA51B": 23, "KW5CA10": 24, "KW6CA171B": 25, "KW7CA51C": 26, "KW8CA163": 27, "KW9N25": 28, "KW10CA51A2": 29, 
+        "KW11CA165": 30, "KW12CA23": 31, "KW13CA49B": 32, "KW14CA140B": 33, "KW15CA24": 34, "KW16CA40": 35, "KW17CA122A": 36, "KW18CA140C": 37, "KW19CA51": 38, "KW20CA140D": 39}
 
 class Killer_Whale_Dataset(Dataset):
     def __init__(self, data_folder, transform = None):
@@ -94,7 +98,9 @@ class Killer_Whale_Dataset(Dataset):
                 species =  filepath.split("/")[1]
                 img_or_mask = filepath.split("/")[3]
             
-                whale["id"] = id
+                whale["id"] = id_labels.get(id)
+                if id_labels.get == None:
+                    print(id)
                 whale["path"] = filepath
 
                 if "resident" in species:
@@ -103,11 +109,12 @@ class Killer_Whale_Dataset(Dataset):
                     whale["species"] = 1
 
                 img = Image.open(filepath)
-                img = img.resize((400, 400))
                 if img_or_mask == "img" or img_or_mask == "IMG":
+                    img = img.resize((400, 400))
                     whale["img"] = img 
                     imgs.append(whale)
                 elif img_or_mask == "mask":
+                    img = img.resize((32, 32))
                     whale["mask"] = img
                     masks.append(whale)
         
@@ -137,14 +144,15 @@ class DeviceDict(dict):
                 dd[k] = v
         return dd
 
-transform = transforms.Compose([transforms.ToTensor()])
+#transform = transforms.Compose([transforms.ToTensor()])
 
-whale_path = 'data/'
+#whale_path = 'data/'
 
-whale_data = Killer_Whale_Dataset(whale_path, transform=transform)
+#whale_data = Killer_Whale_Dataset(whale_path, transform=transform)
 #print(whale_data.__len__())
 #print(type(whale_data[0]))
-#plt.imshow(transforms.ToPILImage()(whale_data[268]['img']))
+#print(whale_data.data)
+#plt.imshow(transforms.ToPILImage()(whale_data[250]['img']))
 #plt.show()
-#plt.imshow(transforms.ToPILImage()(whale_data[268]['mask']))
+#plt.imshow(transforms.ToPILImage()(whale_data[250]['mask']))
 #plt.show()

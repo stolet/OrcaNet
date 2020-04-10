@@ -6,8 +6,8 @@ import torch.nn.functional as F
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from network import OrcaNetV1
-from IPython import display
+from network import OrcaNetV2
+
 import sys
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -35,42 +35,23 @@ val_set = torch.utils.data.Subset(dataset, list(range(validx, len(dataset))))
 # collate_fn_device allows us to preserve custom dictionary when fetching a batch
 collate_fn_device = lambda batch : DeviceDict(torch.utils.data.dataloader.default_collate(batch))
 train_loader = torch.utils.data.DataLoader(train_set, 
-        batch_size = 6, 
+        batch_size = 4, 
         num_workers = 0,
         pin_memory = False,
         shuffle = True,
         drop_last = True,
         collate_fn = collate_fn_device)
 validation_loader = torch.utils.data.DataLoader(val_set, 
-        batch_size = 6, 
+        batch_size = 4, 
         num_workers = 0,
         pin_memory = False,
         shuffle = True,
         drop_last = True,
         collate_fn = collate_fn_device)
 
-# Functions to evaluate classificatio error
-def get_error(net, data):
-    with torch.no_grad():
-        iterator = iter(data)
-        total = 0
-        acc = 0
-        for i in range(len(data)):
-            batch = next(iterator)
-            batch_gpu = batch.to(device)
-            preds = net(batch_gpu)
-            preds_cpu = preds.to('cpu')
-            correct = np.count_nonzero(batch["species"] - preds_cpu["species"].argmax(1) == 0)
-            total += len(batch_gpu["id"])
-            acc += correct
-        print(acc)
-        print(total)
-        return acc / total
-
-
 # Train network
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-network = OrcaNetV1()
+network = OrcaNetV2()
 
 # Use multiple GPUs if available
 if torch.cuda.device_count() > 1:
@@ -79,38 +60,39 @@ if torch.cuda.device_count() > 1:
 network.to(device)
 
 optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
-losses = []
+losses1 = []
+losses2 = []
 valError = []
 
-
-for epoch in range(10):
+for epoch in range(51):
     train_iter = iter(train_loader)
+    batch = None
+    preds = None
     for i in range(len(train_loader)):
         batch = next(train_iter)
         batch_gpu = batch.to(device)
         preds = network(batch_gpu)
         pred_cpu = preds.to('cpu')
-        loss = nn.functional.cross_entropy(preds["species"], batch_gpu["species"])
+        
+        loss1 = nn.functional.mse_loss(preds["mask"], batch_gpu["mask"])
+        loss2 = nn.functional.cross_entropy(preds["species"], batch_gpu["species"])
 
         optimizer.zero_grad()
-        loss.backward()
+        loss1.backward(retain_graph=True)
+        loss2.backward()
         optimizer.step()
-        losses.append(loss.item())
+        losses1.append(loss1.item())
+        losses2.append(loss2.item())
         if i % 10 == 0:
-            print("Loss:", i, losses[-1])
+            print("Loss1:", i, losses1[-1])
+            print("Loss2:", i, losses2[-1])
+            print()
+    
+    if epoch % 10 == 0:
+        pred_cpu["mask"] = torch.clamp(pred_cpu["mask"], min=-0, max=1)
+        plt.imshow(transforms.ToPILImage()(batch["mask"][0]))
+        plt.show()
+        plt.imshow(transforms.ToPILImage()(pred_cpu["mask"][0]))
+        plt.show()
 
-    network.train(False)
-    val_accuracy = get_error(network, validation_loader)
-    valError.append(val_accuracy)
-    print("Val Accuracy: " + str(val_accuracy))
-    network.train(True)
-
-fig=plt.figure(figsize=(20, 5), dpi= 80, facecolor='w', edgecolor='k')
-axes = fig.subplots(1)
-axes.plot(losses)
-axes.set_yscale('log')
-axes.set_xlabel("Gradient iterations")
-axes.set_title('Training loss')
-plt.show()
-#display.clear_output(wait=True)
-#display.display(plt.gcf())
+    
