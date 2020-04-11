@@ -94,6 +94,76 @@ class OrcaNetV2(nn.Module):
         x = self.classify(input_dict["img"], z)
         return DeviceDict({"mask": mask, "species": x})
 
+class Classifier(nn.Module):
+    def __init__(self):
+        super(Classifier, self).__init__()
+        self.conv1 = nn.Conv2d(3, 128, 3)
+        self.conv2 = nn.Conv2d(128, 264, 3)
+        self.conv3 = nn.Conv2d(264, 3, 3)
+         
+        self.fc1 = nn.Linear(10 * 99 * 99, 3 * 20 * 20) 
+        self.fc2 = nn.Linear(3 * 20 * 40, 100)
+        self.fc3 = nn.Linear(100, 40)
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.pool2 = nn.MaxPool2d(kernel_size=3, stride=3)
+        
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, input_dict):
+        z = input_dict["z"]
+        z = z.view(-1, 10 * 99 * 99) 
+        z = self.fc1(z)
+       
+        x = input_dict["img"]
+        x = self.pool2(F.leaky_relu(self.conv1(x)))
+        x = self.pool2(F.leaky_relu(self.conv2(x)))
+        x = self.pool(F.leaky_relu(self.conv3(x)))
+        
+        x = x.view(-1, 3 * 20 * 20)
+        x = torch.cat((x, z), dim = 1)
+        
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
+        return DeviceDict({"id": x})
+
+class VAE(nn.Module):
+    def __init__(self):
+        super(VAE, self).__init__()
+        self.height = 32
+        self.width = 32
+        self.conv1 = nn.Conv2d(3, 128, kernel_size=2, stride=1)
+        self.conv2 = nn.Conv2d(128, 128, kernel_size=2, stride=1)
+        self.conv3 = nn.Conv2d(128, 10, kernel_size=2, stride=1)
+        
+        self.deconv1 = nn.ConvTranspose2d(10, 128, kernel_size=1, stride=1)
+        self.deconv2 = nn.ConvTranspose2d(128, 128, kernel_size=1, stride=1)
+        self.deconv3 = nn.ConvTranspose2d(128, 3, kernel_size=1, stride=1)
+
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        self.fc1 = nn.Linear(3 * 49 * 49, 3 * self.height * self.width)
+
+    def encode(self, x):
+        x = F.leaky_relu(self.conv1(x))
+        x = self.pool(F.leaky_relu(self.conv2(x)))
+        x = self.pool(F.leaky_relu(self.conv3(x)))
+        return x
+
+    def decode(self, x):
+        x = F.leaky_relu(self.deconv1(x))
+        x = F.leaky_relu(self.deconv2(x))
+        x = self.pool(F.leaky_relu(self.deconv3(x)))
+        x = x.view(-1, 3 * 49 * 49)
+        x = self.fc1(x)
+        x = x.view(-1, 3, self.height, self.width)
+        return x
+
+    def forward(self, input_dict):
+        z = self.encode(input_dict["img"])
+        mask = self.decode(z)
+        return DeviceDict({"mask": mask, "z": z})
+
 ## Initialize dataset                   
 #transform= transforms.Compose([transforms.ToTensor()])
 #path = "data/"                             
